@@ -1,0 +1,206 @@
+@import "tailwindcss";
+
+/* AZMARO admin – plain back-office theme (light, neutral, compact). */
+:root {
+  --c-page: #f3f4f6;
+  --c-surface: #ffffff;
+  --c-field: #ffffff;
+  --c-subtle: #f1f5f9;
+  --c-primary: #2563eb;
+  --c-primary-hover: #1d4ed8;
+  --c-text: #111827;
+  --c-text-2: #374151;
+  --c-muted: #6b7280;
+  --c-border: #d1d5db;
+  --c-border-soft: #e5e7eb;
+  --c-danger: #dc2626;
+  --c-success: #15803d;
+  --c-warn: #b45309;
+}
+
+@theme inline {
+  --color-bg: var(--c-page);
+  --color-bg-2: var(--c-field);
+  --color-card: var(--c-surface);
+  --color-elevated: var(--c-subtle);
+  --color-primary: var(--c-primary);
+  --color-primary-hover: var(--c-primary-hover);
+  --color-ink: var(--c-text);
+  --color-ink-2: var(--c-text-2);
+  --color-muted: var(--c-muted);
+  --color-line: var(--c-border);
+  --color-line-soft: var(--c-border-soft);
+  --color-danger: var(--c-danger);
+  --color-success: var(--c-success);
+  --color-warn: var(--c-warn);
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+@layer base {
+  html {
+    background: var(--c-page);
+    color-scheme: light;
+  }
+  body {
+    background: var(--c-page);
+    color: var(--c-text);
+    font-family: var(--font-sans);
+    font-size: 0.8125rem;
+    line-height: 1.45;
+  }
+  :focus-visible {
+    outline: 2px solid var(--c-primary);
+    outline-offset: 1px;
+  }
+}
+
+@layer components {
+  /* Page widths: lists use the full width, detail / form pages the narrow one. */
+  .page {
+    margin-inline: auto;
+    max-width: 1400px;
+  }
+  .page-narrow {
+    margin-inline: auto;
+    max-width: 72rem;
+  }
+  .card {
+    background: var(--c-surface);
+    border: 1px solid var(--c-border-soft);
+    border-radius: 0.375rem;
+  }
+  .label {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--c-text-2);
+  }
+  .input {
+    width: 100%;
+    min-height: 2.125rem;
+    padding: 0.375rem 0.625rem;
+    background: var(--c-field);
+    border: 1px solid var(--c-border);
+    border-radius: 0.25rem;
+    color: var(--c-text);
+  }
+  .input:focus {
+    outline: none;
+    border-color: var(--c-primary);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+  }
+  .input[aria-invalid="true"] {
+    border-color: var(--c-danger);
+  }
+  .input:disabled {
+    background: var(--c-subtle);
+    color: var(--c-muted);
+  }
+  textarea.input {
+    min-height: 4.5rem;
+    resize: vertical;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    min-height: 2.125rem;
+    padding: 0 0.875rem;
+    border-radius: 0.25rem;
+    border: 1px solid var(--c-border);
+    background: var(--c-surface);
+    color: var(--c-text-2);
+    font-weight: 500;
+    font-size: 0.8125rem;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .btn:hover:not(:disabled) {
+    background: var(--c-subtle);
+  }
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .btn-primary {
+    background: var(--c-primary);
+    border-color: var(--c-primary);
+    color: #fff;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--c-primary-hover);
+  }
+  .btn-danger {
+    color: var(--c-danger);
+  }
+  .btn-danger:hover:not(:disabled) {
+    background: #fef2f2;
+    border-color: #fca5a5;
+  }
+  .btn-sm {
+    min-height: 1.75rem;
+    padding: 0 0.5rem;
+    font-size: 0.75rem;
+  }
+  .btn-icon {
+    min-height: 1.75rem;
+    width: 1.75rem;
+    padding: 0;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.0625rem 0.4375rem;
+    border-radius: 0.25rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    background: var(--c-subtle);
+    color: var(--c-text-2);
+    white-space: nowrap;
+  }
+  .badge-ok {
+    background: #dcfce7;
+    color: #166534;
+  }
+  .badge-warn {
+    background: #fef3c7;
+    color: #92400e;
+  }
+  .badge-info {
+    background: #dbeafe;
+    color: #1e40af;
+  }
+  .badge-bad {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .table th {
+    text-align: left;
+    padding: 0.5rem 0.625rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--c-text-2);
+    background: #f9fafb;
+    border-bottom: 1px solid var(--c-border);
+    white-space: nowrap;
+  }
+  .table td {
+    padding: 0.4375rem 0.625rem;
+    border-bottom: 1px solid var(--c-border-soft);
+    vertical-align: middle;
+  }
+  .table tbody tr:hover {
+    background: #f9fafb;
+  }
+  .table tbody tr[aria-selected="true"] {
+    background: #eff6ff;
+  }
+}

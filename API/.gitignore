@@ -1,0 +1,17 @@
+node_modules/
+dist/
+coverage/
+
+# Secrets – keep only the *.example files
+.env
+.env.*
+!.env.example
+!.env.test.example
+
+# Data-script working files (may contain third-party URLs)
+data/image-sources.json
+data/image-reconciliation.json
+data/image-download-log.json
+
+# Private local MySQL (npm run db:start)
+mysql-data/

@@ -1,0 +1,34 @@
+# dependencies
+node_modules/
+
+# builds
+web/.next/
+web/out/
+Admin/.next/
+API/dist/
+*.tsbuildinfo
+web/next-env.d.ts
+Admin/next-env.d.ts
+
+# environment (keep the .env.example files)
+.env
+.env*.local
+API/.env
+web/.env*
+!web/.env.example
+Admin/.env*
+!Admin/.env.example
+!API/.env.example
+
+# logs / OS
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# API data-script artefacts awaiting review
+API/data/image-download-log.json
+API/data/image-sources.json
+API/data/image-reconciliation.json
+API/src/generated/
+API/coverage/
+API/.env.test

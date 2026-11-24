@@ -1,0 +1,67 @@
+{
+  "name": "azmaro-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AZMARO backend API – Express 5, TypeScript, MySQL (mysql2), REST /api/v1.",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/src/server.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tests/tsconfig.json",
+    "lint": "eslint .",
+    "test": "node scripts/run-tests.cjs run",
+    "test:watch": "node scripts/run-tests.cjs",
+    "db:start": "node scripts/local-db.cjs start",
+    "db:stop": "node scripts/local-db.cjs stop",
+    "db:status": "node scripts/local-db.cjs status",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:deploy": "tsx scripts/migrate.ts",
+    "db:migrate:status": "tsx scripts/migrate.ts --status",
+    "db:seed": "tsx db/seed.ts",
+    "admin:create": "tsx scripts/create-admin.ts",
+    "docs:openapi": "tsx scripts/export-openapi.ts",
+    "validate:data": "tsx scripts/validate-product-data.ts",
+    "import:pricing": "tsx scripts/import-pricing.ts",
+    "import:images": "tsx scripts/import-image-workbook.ts",
+    "import:local-images": "tsx scripts/import-local-images.ts",
+    "download:images": "tsx scripts/download-product-images.ts"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "decimal.js": "^10.6.0",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.4",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "mysql2": "^3.24.6",
+    "swagger-ui-express": "^5.0.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^26.6.6",
+    "@types/supertest": "^7.2.1",
+    "@types/swagger-ui-express": "^4.1.8",
+    "eslint": "^9.39.5",
+    "exceljs": "^4.4.0",
+    "globals": "^17.14.0",
+    "supertest": "^7.3.2",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.73.0",
+    "vitest": "^4.1.12"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "@scarf/scarf": false
+  },
+  "engines": {
+    "node": ">=20.12"
+  }
+}

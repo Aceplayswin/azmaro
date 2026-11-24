@@ -1,0 +1,419 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------
+   AZMARO design tokens
+   Every colour, font and radius used by the storefront lives here.
+------------------------------------------------------------------- */
+:root {
+  --az-bg: #090807;
+  --az-bg-2: #100d0a;
+  --az-card: #17120e;
+  --az-elevated: #21180f;
+  --az-gold: #d2ad70;
+  --az-gold-light: #e9ca8e;
+  --az-gold-deep: #a9844b;
+  --az-text: #f4eee4;
+  --az-text-2: #b7a895;
+  --az-muted: #8a7d6c;
+  --az-border: rgba(210, 173, 112, 0.28);
+  --az-border-soft: rgba(210, 173, 112, 0.14);
+  --az-danger: #e08a76;
+  --az-success: #a9c48f;
+
+  --az-header-h: 4.5rem;
+  --az-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@theme inline {
+  --color-bg: var(--az-bg);
+  --color-bg-2: var(--az-bg-2);
+  --color-card: var(--az-card);
+  --color-elevated: var(--az-elevated);
+  --color-gold: var(--az-gold);
+  --color-gold-light: var(--az-gold-light);
+  --color-gold-deep: var(--az-gold-deep);
+  --color-ink: var(--az-text);
+  --color-ink-2: var(--az-text-2);
+  --color-muted: var(--az-muted);
+  --color-line: var(--az-border);
+  --color-line-soft: var(--az-border-soft);
+  --color-danger: var(--az-danger);
+  --color-success: var(--az-success);
+
+  --font-serif: var(--font-cormorant), "Cormorant Garamond", Georgia, serif;
+  --font-sans: var(--font-manrope), "Manrope", system-ui, sans-serif;
+
+  --ease-luxe: var(--az-ease);
+  --breakpoint-xs: 23.75rem;
+}
+
+@layer base {
+  html {
+    background: var(--az-bg);
+    color-scheme: dark;
+    -webkit-text-size-adjust: 100%;
+    scroll-padding-top: calc(var(--az-header-h) + 1rem);
+  }
+
+  body {
+    background: var(--az-bg);
+    color: var(--az-text);
+    font-family: var(--font-sans);
+    font-size: 0.9375rem;
+    line-height: 1.65;
+    letter-spacing: 0.01em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+
+  ::selection {
+    background: rgba(210, 173, 112, 0.35);
+    color: var(--az-text);
+  }
+
+  :focus-visible {
+    outline: 1px solid var(--az-gold);
+    outline-offset: 3px;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-serif);
+    font-weight: 500;
+    letter-spacing: 0.005em;
+    line-height: 1.1;
+    color: var(--az-text);
+    text-wrap: balance;
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+    letter-spacing: inherit;
+  }
+
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  body.az-scroll-locked {
+    overflow: hidden;
+  }
+}
+
+@layer components {
+  /* Layout */
+  .az-container {
+    width: 100%;
+    max-width: 90rem;
+    margin-inline: auto;
+    padding-inline: 1rem;
+  }
+  @media (min-width: 640px) {
+    .az-container {
+      padding-inline: 1.75rem;
+    }
+  }
+  @media (min-width: 1024px) {
+    .az-container {
+      padding-inline: 2.75rem;
+    }
+  }
+
+  /* Typography */
+  .az-eyebrow {
+    font-family: var(--font-sans);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--az-gold);
+  }
+  .az-label {
+    font-family: var(--font-sans);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .az-display {
+    font-family: var(--font-serif);
+    font-weight: 500;
+    font-size: clamp(2.6rem, 6.2vw, 4.75rem);
+    line-height: 1.02;
+  }
+  .az-h1 {
+    font-family: var(--font-serif);
+    font-size: clamp(2.25rem, 4.6vw, 3.5rem);
+    line-height: 1.05;
+  }
+  .az-h2 {
+    font-family: var(--font-serif);
+    font-size: clamp(1.75rem, 3vw, 2.4rem);
+    line-height: 1.1;
+  }
+  .az-wordmark {
+    font-family: var(--font-serif);
+    font-weight: 500;
+    letter-spacing: 0.42em;
+    text-transform: uppercase;
+    color: var(--az-gold);
+    /* compensate trailing letter-spacing so the mark stays optically centred */
+    margin-right: -0.42em;
+  }
+
+  /* Buttons */
+  .az-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    min-height: 3rem;
+    padding: 0.75rem 1.75rem;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    font-family: var(--font-sans);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color 0.35s var(--az-ease),
+      color 0.35s var(--az-ease),
+      border-color 0.35s var(--az-ease),
+      box-shadow 0.35s var(--az-ease);
+  }
+  .az-btn:disabled,
+  .az-btn[aria-disabled="true"] {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+  .az-btn-primary {
+    background: var(--az-gold);
+    color: #140f09;
+    border-color: var(--az-gold);
+  }
+  .az-btn-primary:not(:disabled):hover {
+    background: var(--az-gold-light);
+    border-color: var(--az-gold-light);
+    box-shadow: 0 10px 30px -14px rgba(233, 202, 142, 0.6);
+  }
+  .az-btn-secondary {
+    background: transparent;
+    color: var(--az-gold-light);
+    border-color: var(--az-gold);
+  }
+  .az-btn-secondary:not(:disabled):hover {
+    background: rgba(210, 173, 112, 0.1);
+    color: var(--az-text);
+  }
+  .az-btn-ghost {
+    background: transparent;
+    color: var(--az-text-2);
+    border-color: var(--az-border-soft);
+  }
+  .az-btn-ghost:not(:disabled):hover {
+    color: var(--az-gold-light);
+    border-color: var(--az-border);
+  }
+  .az-btn-sm {
+    min-height: 2.5rem;
+    padding: 0.5rem 1.1rem;
+    font-size: 0.625rem;
+  }
+
+  .az-link {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--az-gold);
+    transition: color 0.3s var(--az-ease);
+  }
+  .az-link:hover {
+    color: var(--az-gold-light);
+  }
+
+  /* Forms */
+  .az-input {
+    width: 100%;
+    min-height: 3rem;
+    padding: 0.7rem 1rem;
+    background: var(--az-bg-2);
+    border: 1px solid var(--az-border-soft);
+    border-radius: 2px;
+    color: var(--az-text);
+    font-size: 0.9375rem;
+    transition:
+      border-color 0.3s var(--az-ease),
+      background-color 0.3s var(--az-ease);
+  }
+  .az-input::placeholder {
+    color: var(--az-muted);
+  }
+  .az-input:hover {
+    border-color: var(--az-border);
+  }
+  .az-input:focus {
+    outline: none;
+    border-color: var(--az-gold);
+    background: var(--az-card);
+  }
+  .az-input[aria-invalid="true"] {
+    border-color: var(--az-danger);
+  }
+  .az-field-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--az-gold);
+  }
+
+  /* Surfaces */
+  .az-panel {
+    background: var(--az-card);
+    border: 1px solid var(--az-border-soft);
+  }
+  .az-rule {
+    height: 1px;
+    background: linear-gradient(90deg, var(--az-border) 0%, var(--az-border-soft) 60%, transparent 100%);
+  }
+
+  /* Chips */
+  .az-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 2.5rem;
+    padding: 0.45rem 1.1rem;
+    border: 1px solid var(--az-border-soft);
+    border-radius: 2px;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--az-text-2);
+    white-space: nowrap;
+    transition: all 0.3s var(--az-ease);
+  }
+  .az-chip:hover {
+    border-color: var(--az-border);
+    color: var(--az-text);
+  }
+  .az-chip[aria-pressed="true"],
+  .az-chip[aria-current="page"],
+  .az-chip[data-active="true"] {
+    border-color: var(--az-gold);
+    color: var(--az-gold-light);
+    background: rgba(210, 173, 112, 0.08);
+  }
+
+  /* Decorative backgrounds */
+  .az-lattice {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' viewBox='0 0 56 56'%3E%3Cg fill='none' stroke='%23d2ad70' stroke-opacity='0.11' stroke-width='0.8'%3E%3Cpath d='M28 4 L52 28 L28 52 L4 28 Z'/%3E%3Cpath d='M28 14 L42 28 L28 42 L14 28 Z'/%3E%3Ccircle cx='28' cy='28' r='4'/%3E%3Cpath d='M0 0 L4 4 M56 0 L52 4 M0 56 L4 52 M56 56 L52 52'/%3E%3C/g%3E%3C/svg%3E");
+    background-size: 56px 56px;
+  }
+  .az-glow {
+    background:
+      radial-gradient(60% 55% at 62% 48%, rgba(210, 140, 60, 0.28) 0%, rgba(120, 70, 25, 0.12) 45%, transparent 75%),
+      radial-gradient(40% 40% at 20% 85%, rgba(210, 173, 112, 0.1) 0%, transparent 70%),
+      linear-gradient(180deg, #120d08 0%, #0b0907 100%);
+  }
+}
+
+@layer utilities {
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .az-safe-bottom {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+}
+
+/* Motion */
+@keyframes az-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes az-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes az-slide-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+@keyframes az-slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes az-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.az-anim-fade {
+  animation: az-fade-in 0.35s var(--az-ease) both;
+}
+.az-anim-rise {
+  animation: az-rise 0.5s var(--az-ease) both;
+}
+.az-anim-drawer {
+  animation: az-slide-left 0.42s var(--az-ease) both;
+}
+.az-anim-sheet {
+  animation: az-slide-up 0.42s var(--az-ease) both;
+}
+.az-anim-pop {
+  animation: az-pop 0.4s var(--az-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

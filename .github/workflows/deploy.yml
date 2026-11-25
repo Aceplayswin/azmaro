@@ -1,0 +1,106 @@
+# Push to main → the EC2 server is provisioned (first run), the code is built and released,
+# and nginx + Let's Encrypt SSL are configured. Every step is idempotent, so re-running is safe.
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   SSH_PRIVATE_KEY   contents of Azmaro.pem
+#   API_ENV           contents of API/.env.production
+# Optional repository variables:
+#   CERTBOT_EMAIL     email for Let's Encrypt expiry notices
+#   SERVER_HOST       defaults to 35.154.146.177
+#   SERVER_USER       defaults to ubuntu
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+env:
+  SERVER_HOST: ${{ vars.SERVER_HOST || '35.154.146.177' }}
+  SERVER_USER: ${{ vars.SERVER_USER || 'ubuntu' }}
+  CERTBOT_EMAIL: ${{ vars.CERTBOT_EMAIL }}
+  APP_DIR: /var/www/azmaro
+
+jobs:
+  deploy:
+    name: Deploy to production
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v5
+
+      - name: Set up SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          if [ -z "$SSH_PRIVATE_KEY" ]; then
+            echo "::error::Add the SSH_PRIVATE_KEY repository secret (contents of Azmaro.pem)."
+            exit 1
+          fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -T 20 -H "$SERVER_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          cat >> ~/.ssh/config <<EOF
+          Host server
+            HostName $SERVER_HOST
+            User $SERVER_USER
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            ServerAliveInterval 30
+            ServerAliveCountMax 20
+          EOF
+          ssh server 'echo "connected to $(hostname)"'
+
+      - name: Prepare app directory
+        run: |
+          ssh server "command -v rsync >/dev/null || { sudo apt-get update -q && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q rsync; }"
+          ssh server "sudo mkdir -p $APP_DIR/source $APP_DIR/shared/env \
+            && sudo chown $SERVER_USER: $APP_DIR $APP_DIR/source $APP_DIR/shared $APP_DIR/shared/env \
+            && sudo chmod 700 $APP_DIR/shared/env"
+
+      - name: Upload API environment
+        env:
+          API_ENV: ${{ secrets.API_ENV }}
+        run: |
+          if [ -n "$API_ENV" ]; then
+            printf '%s\n' "$API_ENV" | tr -d '\r' | ssh server "umask 077 && cat > $APP_DIR/shared/env/api.env"
+          elif ! ssh server "test -s $APP_DIR/shared/env/api.env"; then
+            echo "::error::Add the API_ENV repository secret (contents of API/.env.production)."
+            exit 1
+          fi
+
+      - name: Upload code
+        run: |
+          rsync -az --delete \
+            --exclude '.git/' --exclude 'node_modules/' --exclude '.next/' \
+            --exclude 'API/dist/' --exclude 'API/mysql-data/' --exclude 'API/coverage/' \
+            --exclude '*.pem' --exclude '.env' --exclude '.env.*' --exclude '*.tsbuildinfo' \
+            ./ server:$APP_DIR/source/
+
+      - name: Provision server (packages, MySQL, PM2 – skipped when already done)
+        run: ssh server "sudo bash $APP_DIR/source/deploy/provision.sh"
+
+      - name: Install, build, migrate and release
+        run: ssh server "bash $APP_DIR/source/deploy/deploy.sh '$GITHUB_SHA'"
+
+      - name: nginx + SSL certificates
+        run: ssh server "sudo env CERTBOT_EMAIL='$CERTBOT_EMAIL' bash $APP_DIR/source/deploy/nginx-ssl.sh"
+
+      - name: Check public URLs
+        if: always()
+        run: |
+          {
+            echo "### Deployment"
+            echo "| URL | Status |"
+            echo "|---|---|"
+            for url in https://azmaro.dollara.tech https://admin.azmaro.dollara.tech https://api.azmaro.dollara.tech/api/v1/health; do
+              code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$url") || code="unreachable (no SSL/DNS yet?)"
+              echo "| $url | $code |"
+            done
+          } | tee -a "$GITHUB_STEP_SUMMARY"

@@ -20,6 +20,10 @@ Admin/.env*
 !Admin/.env.example
 !API/.env.example
 
+# production env (paste into the API_ENV GitHub secret instead) + SSH keys
+.env.production
+*.pem
+
 # logs / OS
 npm-debug.log*
 .DS_Store

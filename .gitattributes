@@ -1,0 +1,6 @@
+# Server scripts and configs must keep LF endings (bash/nginx/systemd break on CRLF).
+*.sh   text eol=lf
+*.py   text eol=lf
+*.yml  text eol=lf
+*.cjs  text eol=lf
+*.env  text eol=lf

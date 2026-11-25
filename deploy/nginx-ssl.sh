@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
-# nginx reverse proxy + Let's Encrypt (certbot, webroot) for the three domains.
-#   azmaro.dollara.tech        -> storefront :3000   (/api -> :4000, /images from disk)
-#   admin.azmaro.dollara.tech  -> admin      :3001   (/api -> :4000)
-#   api.azmaro.dollara.tech    -> API        :4000
-# A certificate is requested only for domains whose DNS already points at this server;
-# the others are served over HTTP and picked up automatically on a later deploy.
-# Runs as root. CERTBOT_EMAIL (optional) is used for Let's Encrypt expiry notices.
+# 1. Installs deploy/nginx/azmaro.conf as /etc/nginx/sites-available/azmaro.conf (+ sites-enabled link).
+# 2. Runs certbot (nginx plugin) for each domain, which adds HTTPS + the HTTP -> HTTPS redirect to that file.
+#    Existing certificates are re-installed without contacting Let's Encrypt; new ones are requested only
+#    when the domain's DNS already points at this server.
+# Runs as root. CERTBOT_EMAIL (optional) receives Let's Encrypt expiry notices.
 set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=config.sh
@@ -15,175 +13,56 @@ source "$SCRIPT_DIR/config.sh"
 log() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33mWARN: %s\033[0m\n' "$*" >&2; }
 
-ACME_ROOT=/var/www/letsencrypt
+SRC="$SCRIPT_DIR/nginx/azmaro.conf"
 SITE=/etc/nginx/sites-available/azmaro.conf
-PUBLIC_DIR="$APP_DIR/shared/public"
 DOMAINS=("$WEB_DOMAIN" "$ADMIN_DOMAIN" "$API_DOMAIN")
-mkdir -p "$ACME_ROOT" "$PUBLIC_DIR/images"
 
-# ── Shared snippets ───────────────────────────────────────────────────
-cat > /etc/nginx/snippets/azmaro-proxy.conf <<'EOF'
-proxy_http_version 1.1;
-proxy_set_header Host $host;
-proxy_set_header X-Real-IP $remote_addr;
-proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-proxy_set_header X-Forwarded-Proto $scheme;
-proxy_set_header X-Forwarded-Host $host;
-proxy_set_header Connection "";
-proxy_read_timeout 120s;
-EOF
+# ── nginx site ────────────────────────────────────────────────────────
+log "nginx: $SITE"
+[ -f "$SITE" ] && cp "$SITE" "$SITE.bak"
+cp "$SRC" "$SITE"
+ln -sfn "$SITE" /etc/nginx/sites-enabled/azmaro.conf
+rm -f /etc/nginx/sites-enabled/default
+if ! nginx -t; then
+  warn "nginx config test failed – restoring the previous config"
+  if [ -f "$SITE.bak" ]; then mv "$SITE.bak" "$SITE"; else rm -f "$SITE" /etc/nginx/sites-enabled/azmaro.conf; fi
+  exit 1
+fi
+rm -f "$SITE.bak"
+systemctl reload-or-restart nginx
+# leftovers from the earlier generated setup
+rm -f /etc/nginx/snippets/azmaro-proxy.conf /etc/nginx/snippets/azmaro-ssl.conf \
+      /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
 
-cat > /etc/nginx/snippets/azmaro-ssl.conf <<'EOF'
-ssl_protocols TLSv1.2 TLSv1.3;
-ssl_prefer_server_ciphers off;
-ssl_session_cache shared:AZMARO_SSL:10m;
-ssl_session_timeout 1d;
-ssl_session_tickets off;
-add_header Strict-Transport-Security "max-age=31536000" always;
-EOF
+# ── SSL (certbot) ─────────────────────────────────────────────────────
+log "SSL certificates (certbot)"
+ip=$(curl -fsS --max-time 10 https://checkip.amazonaws.com 2>/dev/null | tr -d '[:space:]' || true)
+if [ -n "${CERTBOT_EMAIL:-}" ]; then email_args=(--email "$CERTBOT_EMAIL"); else email_args=(--register-unsafely-without-email); fi
 
-NGINX_VERSION=$(nginx -v 2>&1 | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' | head -1)
-if [ "$(printf '%s\n' 1.25.1 "$NGINX_VERSION" | sort -V | head -1)" = "1.25.1" ]; then HTTP2="http2 on;"; else HTTP2=""; fi
+for d in "${DOMAINS[@]}"; do
+  args=(--nginx --non-interactive --agree-tos --redirect --cert-name "$d" -d "$d" "${email_args[@]}")
+  renewal="/etc/letsencrypt/renewal/$d.conf"
 
-ACME="location ^~ /.well-known/acme-challenge/ { root $ACME_ROOT; default_type text/plain; }"
-has_cert() { [ -s "/etc/letsencrypt/live/$1/fullchain.pem" ]; }
-proxy() { echo "proxy_pass http://127.0.0.1:$1; include snippets/azmaro-proxy.conf;"; }
-
-# ── Locations per app ─────────────────────────────────────────────────
-web_locations() {
-  cat <<EOF
-    location /api/ { $(proxy "$API_PORT") }
-    # Product photos straight from disk (includes admin uploads); anything else falls back to Next.js.
-    location /images/ {
-        root $PUBLIC_DIR;
-        try_files \$uri @storefront;
-        expires 7d;
-        access_log off;
-    }
-    location @storefront { $(proxy "$WEB_PORT") }
-    location / { $(proxy "$WEB_PORT") }
-EOF
-}
-admin_locations() {
-  cat <<EOF
-    location /api/ { $(proxy "$API_PORT") }
-    location / { $(proxy "$ADMIN_PORT") }
-EOF
-}
-api_locations() {
-  cat <<EOF
-    location / { $(proxy "$API_PORT") }
-EOF
-}
-
-server_block() {
-  local domain=$1 locations=$2 extra=$3
-  if has_cert "$domain"; then
-    cat <<EOF
-server {
-    listen 80;
-    listen [::]:80;
-    server_name $domain;
-    $ACME
-    location / { return 301 https://\$host\$request_uri; }
-}
-
-server {
-    listen 443 ssl;
-    listen [::]:443 ssl;
-    $HTTP2
-    server_name $domain;
-    ssl_certificate     /etc/letsencrypt/live/$domain/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/$domain/privkey.pem;
-    include snippets/azmaro-ssl.conf;
-    $extra
-    $ACME
-$($locations)
-}
-
-EOF
+  if [ -f "$renewal" ] && ! grep -q '^authenticator = webroot' "$renewal"; then
+    args+=(--keep-until-expiring)          # have a certificate: just put it back into the config
   else
-    cat <<EOF
-server {
-    listen 80;
-    listen [::]:80;
-    server_name $domain;
-    $extra
-    $ACME
-$($locations)
-}
-
-EOF
-  fi
-}
-
-render() {
-  log "nginx sites"
-  {
-    echo "# Generated by deploy/nginx-ssl.sh on every deploy – edit that script, not this file."
-    cat <<EOF
-# Requests by IP address / unknown host -> storefront over HTTP (handy before DNS is ready).
-server {
-    listen 80 default_server;
-    listen [::]:80 default_server;
-    server_name _;
-    $ACME
-$(web_locations)
-}
-
-EOF
-    server_block "$WEB_DOMAIN" web_locations ""
-    server_block "$ADMIN_DOMAIN" admin_locations "client_max_body_size 10m;"
-    server_block "$API_DOMAIN" api_locations "client_max_body_size 10m;"
-  } > "$SITE.new"
-
-  [ -f "$SITE" ] && cp "$SITE" "$SITE.bak"
-  mv "$SITE.new" "$SITE"
-  ln -sfn "$SITE" /etc/nginx/sites-enabled/azmaro.conf
-  rm -f /etc/nginx/sites-enabled/default
-  if ! nginx -t; then
-    warn "nginx config test failed – restoring the previous config"
-    if [ -f "$SITE.bak" ]; then mv "$SITE.bak" "$SITE"; else rm -f "$SITE" /etc/nginx/sites-enabled/azmaro.conf; fi
-    exit 1
-  fi
-  systemctl reload-or-restart nginx
-}
-
-# ── Certificates ──────────────────────────────────────────────────────
-NEW_CERTS=0
-issue_certs() {
-  log "SSL certificates (Let's Encrypt)"
-  local ip resolved email_args
-  ip=$(curl -fsS --max-time 10 https://checkip.amazonaws.com 2>/dev/null | tr -d '[:space:]' || true)
-  if [ -n "${CERTBOT_EMAIL:-}" ]; then email_args=(--email "$CERTBOT_EMAIL"); else email_args=(--register-unsafely-without-email); fi
-
-  for d in "${DOMAINS[@]}"; do
-    if has_cert "$d"; then echo "  ok   $d (certificate present, auto-renews)"; continue; fi
     resolved=$(getent ahostsv4 "$d" 2>/dev/null | awk '{print $1}' | sort -u | tr '\n' ' ' || true)
     if [ -z "$ip" ] || ! grep -qwF -- "$ip" <<<"$resolved"; then
-      warn "$d resolves to [${resolved:-nothing}], this server is ${ip:-unknown}. Point an A record for $d at ${ip:-this server}; SSL is issued on the next deploy."
+      warn "$d resolves to [${resolved:-nothing}], this server is ${ip:-unknown} – add an A record for $d -> ${ip:-this server}. Skipping SSL for now."
       continue
     fi
-    if certbot certonly --webroot -w "$ACME_ROOT" --cert-name "$d" -d "$d" \
-         --non-interactive --agree-tos --keep-until-expiring "${email_args[@]}"; then
-      NEW_CERTS=1
-    else
-      warn "certbot failed for $d (are ports 80/443 open in the AWS security group?)"
-    fi
-  done
-}
+    # A certificate from the earlier webroot setup is re-issued once through the nginx plugin.
+    [ -f "$renewal" ] && args+=(--force-renewal) || args+=(--keep-until-expiring)
+  fi
 
-# Reload nginx whenever certbot renews a certificate (certbot.timer runs twice a day).
-install -d /etc/letsencrypt/renewal-hooks/deploy
-printf '#!/bin/sh\nsystemctl reload nginx\n' > /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
-chmod 755 /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
-systemctl enable --now certbot.timer >/dev/null 2>&1 || true
+  certbot "${args[@]}" || warn "certbot failed for $d (are ports 80 and 443 open in the AWS security group?)"
+done
 
-render
-issue_certs
-[ "$NEW_CERTS" -eq 1 ] && render
+# The webroot folder of the earlier setup is no longer used once no certificate renews through it.
+grep -qs '^authenticator = webroot' /etc/letsencrypt/renewal/*.conf || rm -rf /var/www/letsencrypt
+systemctl enable --now certbot.timer >/dev/null 2>&1 || true   # auto-renewal
 
 log "Live URLs"
 for d in "${DOMAINS[@]}"; do
-  if has_cert "$d"; then echo "  https://$d"; else echo "  http://$d   (no SSL yet – check DNS)"; fi
+  if grep -q "/etc/letsencrypt/live/$d/" "$SITE"; then echo "  https://$d"; else echo "  http://$d   (no SSL yet – check DNS)"; fi
 done

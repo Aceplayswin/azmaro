@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Server setup – runs as root on every deploy and skips whatever is already done:
-#   swap · Node.js · PM2 (+ boot service) · nginx · MySQL · certbot
-#   MySQL remote access · database + user from the DB_* values · app directories · upload watcher
+#   swap · Node.js · PM2 (+ boot service) · nginx · MySQL · certbot (nginx plugin)
+#   MySQL remote access · database + user from the DB_* values in API/.env · upload watcher
 set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=config.sh
@@ -10,7 +10,7 @@ source "$SCRIPT_DIR/config.sh"
 
 export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a
 log() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
-API_ENV="$APP_DIR/shared/env/api.env"
+API_ENV="$APP_DIR/API/.env"
 DEPLOY_HOME=$(getent passwd "$DEPLOY_USER" | cut -d: -f6)
 
 # ── Swap ──────────────────────────────────────────────────────────────
@@ -30,7 +30,7 @@ fi
 
 # ── System packages ───────────────────────────────────────────────────
 log "Packages: nginx, MySQL, certbot"
-PACKAGES=(nginx mysql-server certbot rsync curl ca-certificates gnupg python3)
+PACKAGES=(nginx mysql-server certbot python3-certbot-nginx rsync curl ca-certificates gnupg python3)
 missing=()
 for p in "${PACKAGES[@]}"; do
   dpkg-query -W -f='${Status}' "$p" 2>/dev/null | grep -q "install ok installed" || missing+=("$p")
@@ -88,24 +88,19 @@ else
   echo "configuration unchanged"
 fi
 
-log "MySQL database + user (from DB_USER / DB_PASSWORD / DB_NAME in the API_ENV secret)"
-[ -s "$API_ENV" ] || { echo "Missing $API_ENV – the workflow uploads it from the API_ENV secret." >&2; exit 1; }
+log "MySQL database + user (DB_USER / DB_PASSWORD / DB_NAME from API/.env)"
+[ -s "$API_ENV" ] || { echo "Missing $API_ENV – the workflow writes it from the API_ENV secret." >&2; exit 1; }
 python3 "$SCRIPT_DIR/lib/dbconfig.py" "$API_ENV" sql | mysql --protocol=socket -uroot
 echo "database '$(python3 "$SCRIPT_DIR/lib/dbconfig.py" "$API_ENV" name)' and its user are ready (localhost + remote)"
 
 # ── Directories ───────────────────────────────────────────────────────
-log "Directories"
-install -d -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 755 \
-  "$APP_DIR" "$APP_DIR/source" "$APP_DIR/releases" "$APP_DIR/shared" \
-  "$APP_DIR/shared/public" "$APP_DIR/shared/public/images" "$APP_DIR/shared/public/images/products"
-install -d -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 700 "$APP_DIR/shared/env" "$APP_DIR/shared/backups"
-install -d -m 755 /var/www/letsencrypt
+install -d -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 755 "$APP_DIR" "$APP_DIR/web/public/images/products"
+install -d -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 700 "$BACKUP_DIR"
 systemctl enable --now nginx >/dev/null
 
 # ── Admin photo uploads → storefront ──────────────────────────────────
-# The API saves uploads in shared/public/images/products. Next.js only serves public/ files
-# that existed when it started, so copy new uploads into the live release and reload the
-# storefront (debounced by 20 s so a batch of uploads causes one reload).
+# Next.js only serves public/ files that existed when it started, so reload the storefront
+# after an upload (debounced by 20 s so a batch of uploads causes one reload).
 log "Upload watcher"
 cat > /etc/systemd/system/azmaro-images.service <<EOF
 [Unit]
@@ -117,14 +112,14 @@ User=$DEPLOY_USER
 Environment=PM2_HOME=$DEPLOY_HOME/.pm2
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 ExecStartPre=/bin/sleep 20
-ExecStart=/bin/bash $APP_DIR/current/deploy/sync-images.sh
+ExecStart=/bin/bash $APP_DIR/deploy/sync-images.sh
 EOF
 cat > /etc/systemd/system/azmaro-images.path <<EOF
 [Unit]
 Description=Watch AZMARO product photo uploads
 
 [Path]
-PathChanged=$APP_DIR/shared/public/images/products
+PathChanged=$APP_DIR/web/public/images/products
 Unit=azmaro-images.service
 
 [Install]

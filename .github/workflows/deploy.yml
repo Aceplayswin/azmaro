@@ -1,9 +1,11 @@
-# Push to main → the EC2 server is provisioned (first run), the code is built and released,
-# and nginx + Let's Encrypt SSL are configured. Every step is idempotent, so re-running is safe.
+# Push to main → the repo is synced to /var/www/azmaro on the EC2 server (same folder structure),
+# the server is provisioned (first run), the apps are installed, built and restarted with PM2,
+# nginx is configured from deploy/nginx/azmaro.conf and SSL is installed with certbot.
+# Every step is idempotent, so re-running is safe.
 #
 # Required repository secrets (Settings → Secrets and variables → Actions):
 #   SSH_PRIVATE_KEY   contents of Azmaro.pem
-#   API_ENV           contents of API/.env.production
+#   API_ENV           contents of API/.env.production (written to /var/www/azmaro/API/.env)
 # Optional repository variables:
 #   CERTBOT_EMAIL     email for Let's Encrypt expiry notices
 #   SERVER_HOST       defaults to 35.154.146.177
@@ -57,40 +59,65 @@ jobs:
           EOF
           ssh server 'echo "connected to $(hostname)"'
 
-      - name: Prepare app directory
+      - name: Prepare /var/www/azmaro
         run: |
-          ssh server "command -v rsync >/dev/null || { sudo apt-get update -q && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q rsync; }"
-          ssh server "sudo mkdir -p $APP_DIR/source $APP_DIR/shared/env \
-            && sudo chown $SERVER_USER: $APP_DIR $APP_DIR/source $APP_DIR/shared $APP_DIR/shared/env \
-            && sudo chmod 700 $APP_DIR/shared/env"
+          ssh server "APP_DIR=$APP_DIR SERVER_USER=$SERVER_USER bash -s" <<'EOF'
+          set -euo pipefail
+          command -v rsync >/dev/null || { sudo apt-get update -q && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q rsync; }
+          sudo mkdir -p "$APP_DIR/API"
+          sudo chown "$SERVER_USER:" "$APP_DIR" "$APP_DIR/API"
+          sudo systemctl stop azmaro-images.path 2>/dev/null || true
 
-      - name: Upload API environment
+          # One-time cleanup of the earlier releases/current/shared/source layout.
+          if [ -e "$APP_DIR/current" ] || [ -d "$APP_DIR/releases" ] || [ -d "$APP_DIR/shared" ] || [ -d "$APP_DIR/source" ]; then
+            echo "Removing the old releases/current/shared/source layout"
+            for app in azmaro-api azmaro-web azmaro-admin; do pm2 delete "$app" >/dev/null 2>&1 || true; done
+            pm2 save --force >/dev/null 2>&1 || true
+            if [ -d "$APP_DIR/shared/public/images/products" ]; then      # keep admin photo uploads
+              mkdir -p "$APP_DIR/web/public/images/products"
+              rsync -a "$APP_DIR/shared/public/images/products/" "$APP_DIR/web/public/images/products/"
+            fi
+            if [ -d "$APP_DIR/shared/backups" ]; then                      # keep DB backups
+              sudo install -d -o "$SERVER_USER" -g "$SERVER_USER" -m 700 /var/backups/azmaro
+              sudo find "$APP_DIR/shared/backups" -type f -exec mv -t /var/backups/azmaro {} +
+            fi
+            if [ -s "$APP_DIR/shared/env/api.env" ] && [ ! -s "$APP_DIR/API/.env" ]; then
+              install -m 600 "$APP_DIR/shared/env/api.env" "$APP_DIR/API/.env"
+            fi
+            sudo rm -rf "$APP_DIR/current" "$APP_DIR/releases" "$APP_DIR/shared" "$APP_DIR/source"
+          fi
+          EOF
+
+      - name: Upload API environment (API/.env)
         env:
           API_ENV: ${{ secrets.API_ENV }}
         run: |
           if [ -n "$API_ENV" ]; then
-            printf '%s\n' "$API_ENV" | tr -d '\r' | ssh server "umask 077 && cat > $APP_DIR/shared/env/api.env"
-          elif ! ssh server "test -s $APP_DIR/shared/env/api.env"; then
+            printf '%s\n' "$API_ENV" | tr -d '\r' | ssh server "umask 077 && cat > $APP_DIR/API/.env"
+          elif ! ssh server "test -s $APP_DIR/API/.env"; then
             echo "::error::Add the API_ENV repository secret (contents of API/.env.production)."
             exit 1
           fi
 
-      - name: Upload code
+      - name: Upload code to /var/www/azmaro
+        # --delete mirrors the repo; excluded paths (node_modules, builds, .env files) and
+        # admin-uploaded product photos on the server are left alone.
         run: |
           rsync -az --delete \
             --exclude '.git/' --exclude 'node_modules/' --exclude '.next/' \
             --exclude 'API/dist/' --exclude 'API/mysql-data/' --exclude 'API/coverage/' \
             --exclude '*.pem' --exclude '.env' --exclude '.env.*' --exclude '*.tsbuildinfo' \
-            ./ server:$APP_DIR/source/
+            --filter 'P /web/public/images/products/**' \
+            ./ server:$APP_DIR/
 
       - name: Provision server (packages, MySQL, PM2 – skipped when already done)
-        run: ssh server "sudo bash $APP_DIR/source/deploy/provision.sh"
+        run: ssh server "sudo bash $APP_DIR/deploy/provision.sh"
 
-      - name: Install, build, migrate and release
-        run: ssh server "bash $APP_DIR/source/deploy/deploy.sh '$GITHUB_SHA'"
+      - name: Install, build, migrate and start with PM2
+        run: ssh server "bash $APP_DIR/deploy/deploy.sh"
 
-      - name: nginx + SSL certificates
-        run: ssh server "sudo env CERTBOT_EMAIL='$CERTBOT_EMAIL' bash $APP_DIR/source/deploy/nginx-ssl.sh"
+      - name: nginx (sites-available/azmaro.conf) + SSL (certbot)
+        run: ssh server "sudo env CERTBOT_EMAIL='$CERTBOT_EMAIL' bash $APP_DIR/deploy/nginx-ssl.sh"
 
       - name: Check public URLs
         if: always()

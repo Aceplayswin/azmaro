@@ -83,12 +83,14 @@ log "PM2"
 pm2 startOrReload deploy/ecosystem.config.cjs --update-env
 
 wait_for() {
-  local name=$1 url=$2
+  local name=$1 url=$2 err=""
+  # Apps are still booting right after a PM2 reload, so early "connection refused"
+  # errors are expected – only show curl's last error if the service never comes up.
   for _ in $(seq 1 45); do
-    if curl -fsS -o /dev/null --max-time 5 "$url"; then echo "  ok   $name"; return 0; fi
+    if err=$(curl -fsS -o /dev/null --max-time 5 "$url" 2>&1); then echo "  ok   $name"; return 0; fi
     sleep 2
   done
-  echo "  FAIL $name ($url)"
+  echo "  FAIL $name ($url): $err"
   return 1
 }
 
